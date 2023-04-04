@@ -1,0 +1,418 @@
+package com.example.product_pricing
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import product.Product
+
+
+class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+
+    companion object {
+        const val DATABASE_VERSION = 1
+        const val DATABASE_NAME = "ProductDatabase.db"
+        const val TABLE_NAME = "ProductTable"
+        const val COLUMN_ID = "id"
+        const val COLUMN_BARCODE = "barcode"
+        const val COLUMN_NAME = "name"
+        const val COLUMN_PRICE = "price"
+    }
+
+    override fun onCreate(db: SQLiteDatabase) {
+        // Create the table
+        val createTableQuery = "CREATE TABLE $TABLE_NAME ($COLUMN_ID INTEGER PRIMARY KEY, $COLUMN_BARCODE TEXT, $COLUMN_NAME TEXT, $COLUMN_PRICE REAL)"
+        db?.execSQL(createTableQuery)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Handle upgrades to the database schema
+        db?.execSQL("DROP TABLE IF EXISTS $TABLE_NAME")
+        onCreate(db)
+    }
+
+    // Insert a product into the database
+    fun insertProduct(barcode: String, name: String, price: Double) {
+        val db = writableDatabase
+        val values = ContentValues()
+        values.put(COLUMN_BARCODE, barcode)
+        values.put(COLUMN_NAME, name)
+        values.put(COLUMN_PRICE, price)
+        db.insert(TABLE_NAME, null, values)
+        db.close()
+    }
+
+    class Product(val name: Int, val price: String, val barcode: String, d: Double)
+
+    // Get a product by its barcode from the database
+    private fun getProductByBarcode(barcode: String): Product? {
+        val db = readableDatabase
+        val projection = arrayOf(COLUMN_ID, COLUMN_BARCODE, COLUMN_NAME, COLUMN_PRICE)
+        val selection = "$COLUMN_BARCODE = ?"
+        val selectionArgs = arrayOf(barcode)
+        val cursor: Cursor = db.query(
+            TABLE_NAME, projection, selection, selectionArgs, null, null, null
+        )
+        var product: Product? = null
+        if (cursor.moveToFirst()) {
+            val idIndex = cursor.getColumnIndex(COLUMN_ID)
+            val id = if (idIndex >= 0) cursor.getInt(idIndex) else null
+            val nameColumnIndex = cursor.getColumnIndex(COLUMN_NAME)
+            val name = if (nameColumnIndex >= 0) cursor.getString(nameColumnIndex) else null
+            val priceIndex = cursor.getColumnIndex(COLUMN_PRICE)
+            val price = if (priceIndex >= 0) cursor.getDouble(priceIndex) else 0.0
+
+            fun <T, R> T.let(block: (T) -> R): R = block(this)
+
+            product = id?.let { id: Int ->
+                Product(id, barcode.toString(), name ?: "", price ?: 0.0)
+            }
+
+
+        }
+        cursor.close()
+        db.close()
+        return product
+    }
+    class ProductDbHelper(context: Context, dbName: String) : SQLiteOpenHelper(context, dbName, null, 1) {
+
+        override fun onCreate(db: SQLiteDatabase?) {
+            val createTable = "CREATE TABLE $TABLE_NAME " +
+                    "($COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "$COLUMN_BARCODE TEXT UNIQUE," +
+                    "$COLUMN_NAME TEXT," +
+                    "$COLUMN_PRICE REAL)"
+            db?.execSQL(createTable)
+        }
+
+        override fun onUpgrade(db: SQLiteDatabase?, oldVersion: Int, newVersion: Int) {
+            db?.execSQL("DROP TABLE IF EXISTS $TABLE_NAME")
+            onCreate(db)
+        }
+
+        fun insertProduct(product: Product) {
+            val db = this.writableDatabase
+            val contentValues = ContentValues()
+            contentValues.put(COLUMN_BARCODE, product.barcode)
+            contentValues.put(COLUMN_NAME, product.name)
+            contentValues.put(COLUMN_PRICE, product.price)
+            db.insert(TABLE_NAME, null, contentValues)
+            db.close()
+        }
+
+        fun getProductByBarcode(barcode: String): Product? {
+            val db = this.readableDatabase
+            val query = "SELECT * FROM $TABLE_NAME WHERE $COLUMN_BARCODE = ?"
+            val cursor = db.rawQuery(query, arrayOf(barcode))
+            var product: Product? = null
+            if (cursor.moveToFirst()) {
+                val idIndex = cursor.getColumnIndex(COLUMN_ID)
+                val id = if (idIndex >= 0) cursor.getInt(idIndex) else null
+                val nameColumnIndex = cursor.getColumnIndex(COLUMN_NAME)
+                val name = if (nameColumnIndex >= 0) cursor.getString(nameColumnIndex) else null
+                val priceIndex = cursor.getColumnIndex(COLUMN_PRICE)
+                val price = if (priceIndex >= 0) cursor.getDouble(priceIndex) else 0.0
+                fun <T, R> T.let(block: (T) -> R): R = block(this)
+                product = id?.let { id: Int ->
+                    Product(id, barcode, name ?: "", price)
+                }
+            }
+            cursor.close()
+            db.close()
+            return product
+        }
+
+        companion object {
+            private const val TABLE_NAME = "products"
+            private const val COLUMN_ID = "id"
+            private const val COLUMN_BARCODE = "barcode"
+            private const val COLUMN_NAME = "name"
+            private const val COLUMN_PRICE = "price"
+        }
+    }
+
+    // Function to add a product to the database
+private fun addProductToDatabase(product: Product) {
+        val dbHelper = ProductDbHelper(context, "my_database_name")
+        val db = dbHelper.writableDatabase
+
+    val values = ContentValues().apply {
+        put("barcode", product.barcode)
+        put("name", product.name)
+        put("description", product.description)
+        put("price", product.price)
+        put("offer", product.offer)
+    }
+
+    db.insert("products", null, values)
+}
+
+// Function to update a product in the database
+private fun updateProductInDatabase(product: Product) {
+    val context: Context = applicationContext
+    val dbHelper = DatabaseHelper(applicationContext)
+    val db = dbHelper.writableDatabase
+
+    val values = ContentValues().apply {
+        put("barcode", product.barcode)
+        put("name", product.name)
+        put("description", product.description)
+        put("price", product.price)
+        put("offer", product.offer)
+    }
+
+    val selection = "id = ?"
+    val selectionArgs = arrayOf(product.id.toString())
+
+    db.update("products", values, selection, selectionArgs)
+}
+
+// Function to handle the scan result
+private fun handleScanResult(barcode: String) {
+    // Check if product is already in the database
+    val existingProduct = getProductByBarcode(barcode)
+
+    if (existingProduct != null) {
+        // If product is already in the database, display its details
+        binding.tvProductName.text = existingProduct.name
+        binding.tvProductDescription.text = existingProduct.description
+        binding.tvProductPrice.text = existingProduct.price.toString()
+        binding.tvOffer.text = if (existingProduct.offer == 1) "Product has offer" else "Product has no offer"
+    } else {
+        // If product is not in the database, get its details from the API
+        getProductDetails(barcode)
+    }
+}
+
+// Function to handle API response and add/update product in database
+private fun handleApiResponse(barcode: String, response: JSONObject) {
+    if (response != null) {
+        val products = response.getJSONArray("products")
+        if (products.length() > 0) {
+            val productJson = products.getJSONObject(0)
+            val productName = productJson.getString("product_name")
+            val productDescription = productJson.getString("description")
+            val productPrice = productJson.getDouble("price")
+            val productOffer = if (productJson.getBoolean)
+
+            // Initialize database helper
+            val dbHelper = ProductDbHelper(this)
+            val db = dbHelper.writableDatabase
+
+            // Check if product exists in database
+            val cursor = db.rawQuery(
+                "SELECT * FROM ${ProductContract.ProductEntry.TABLE_NAME} WHERE ${ProductContract.ProductEntry.COLUMN_BARCODE}='${barcode}'",
+                null
+            )
+            if (cursor.count > 0) {
+                // Product exists in database, update product details
+                cursor.moveToFirst()
+                val id =
+                    cursor.getInt(cursor.getColumnIndexOrThrow(ProductContract.ProductEntry._ID))
+                val values = ContentValues().apply {
+                    put(ProductContract.ProductEntry.COLUMN_NAME, productName)
+                    put(ProductContract.ProductEntry.COLUMN_DESCRIPTION, productDescription)
+                    put(ProductContract.ProductEntry.COLUMN_PRICE, productPrice)
+                    put(ProductContract.ProductEntry.COLUMN_OFFER, productOffer)
+                }
+                val updatedRows = db.update(
+                    ProductContract.ProductEntry.TABLE_NAME,
+                    values,
+                    "${ProductContract.ProductEntry._ID}=?",
+                    arrayOf(id.toString())
+                )
+                if (updatedRows > 0) {
+                    Toast.makeText(this, "Product details updated", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Error updating product details", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            } else {
+                // Product does not exist in database, add product
+                val values = ContentValues().apply {
+                    put(ProductContract.ProductEntry.COLUMN_BARCODE, barcode)
+                    put(ProductContract.ProductEntry.COLUMN_NAME, productName)
+                    put(ProductContract.ProductEntry.COLUMN_DESCRIPTION, productDescription)
+                    put(ProductContract.ProductEntry.COLUMN_PRICE, productPrice)
+                    put(ProductContract.ProductEntry.COLUMN_OFFER, productOffer)
+                }
+                val newRowId = db.insert(ProductContract.ProductEntry.TABLE_NAME, null, values)
+                if (newRowId != -1L) {
+                    Toast.makeText(this, "Product added to database", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Error adding product to database", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            }
+            cursor.close()
+            db.close()
+        } else {
+            Toast.makeText(this, "Product not found", Toast.LENGTH_SHORT).show()
+        }
+    } else {
+        Toast.makeText(this, "Error: Response is null", Toast.LENGTH_SHORT).show()
+    }
+}
+// Function to handle errors during API call
+private fun handleApiError(error: VolleyError) {
+    val errorMessage = when (error) {
+        is TimeoutError -> "Timeout error occurred"
+        is NoConnectionError -> "No internet connection available"
+        is AuthFailureError -> "Authentication failure"
+        is NetworkError -> "Network error occurred"
+        is ServerError -> "Server error occurred"
+        is ParseError -> "Parsing error occurred"
+        else -> "Unknown error occurred"
+    }
+    Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show()
+}
+
+// Function to request product information from API
+private fun requestProductInfo(barcode: String) {
+    val url = "https://example.com/api/get_product_info.php?barcode=$barcode"
+    val request = JsonObjectRequest(
+        Request.Method.GET, url, null,
+        { response ->
+            handleApiResponse(barcode, response)
+        },
+        { error ->
+            handleApiError(error)
+        }
+    )
+    requestQueue.add(request)
+}
+
+// Function to add product to database
+private fun addProductToDatabase(barcode: String, name: String, description: String, price: Double, offer: Boolean) {
+    val values = ContentValues()
+    values.put(DatabaseContract.ProductEntry.COLUMN_BARCODE, barcode)
+    values.put(DatabaseContract.ProductEntry.COLUMN_NAME, name)
+    values.put(DatabaseContract.ProductEntry.COLUMN_DESCRIPTION, description)
+    values.put(DatabaseContract.ProductEntry.COLUMN_PRICE, price)
+    values.put(DatabaseContract.ProductEntry.COLUMN_OFFER, offer)
+    val newRowId = database.insert(DatabaseContract.ProductEntry.TABLE_NAME, null, values)
+    if (newRowId != -1L) {
+        Toast.makeText(this, "Product added to database", Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(this, "Error adding product to database", Toast.LENGTH_SHORT).show()
+    }
+}
+}
+}
+// Function to update the UI with the scanned product's details
+private fun updateUI(product: Product) {
+    binding.productName.text = product.name
+    binding.productDescription.text = product.description
+    binding.productPrice.text = getString(R.string.price, product.price)
+    if (product.offer != null) {
+        binding.productOffer.text = getString(R.string.offer, product.offer)
+        binding.productOffer.visibility = View.VISIBLE
+    } else {
+        binding.productOffer.visibility = View.GONE
+    }
+}
+
+// Function to show an error message
+private fun showError(message: String) {
+    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+}
+
+// Function to handle camera permission request result
+override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == CAMERA_PERMISSION_REQUEST && grantResults.isNotEmpty() &&
+        grantResults[0] == PackageManager.PERMISSION_GRANTED
+    ) {
+        startScan()
+    } else {
+        showError(getString(R.string.camera_permission_denied))
+    }
+}
+
+// Function to handle the back button press
+override fun onBackPressed() {
+    if (binding.scannerView.visibility == View.VISIBLE) {
+        binding.scannerView.stopCamera()
+        binding.scannerView.visibility = View.GONE
+        binding.productDetails.visibility = View.VISIBLE
+    } else {
+        super.onBackPressed()
+    }
+}
+// Function to save product in database
+private fun saveProduct(barcode: String, name: String, description: String, price: Double, offer: Double) {
+    val db = dbHelper.writableDatabase
+    val values = ContentValues().apply {
+        put(ProductContract.ProductEntry.COLUMN_BARCODE, barcode)
+        put(ProductContract.ProductEntry.COLUMN_NAME, name)
+        put(ProductContract.ProductEntry.COLUMN_DESCRIPTION, description)
+        put(ProductContract.ProductEntry.COLUMN_PRICE, price)
+        put(ProductContract.ProductEntry.COLUMN_OFFER, offer)
+    }
+    db.insert(ProductContract.ProductEntry.TABLE_NAME, null, values)
+}
+
+// Function to update product in database
+private fun updateProduct(barcode: String, name: String, description: String, price: Double, offer: Double) {
+    val db = dbHelper.writableDatabase
+    val values = ContentValues().apply {
+        put(ProductContract.ProductEntry.COLUMN_NAME, name)
+        put(ProductContract.ProductEntry.COLUMN_DESCRIPTION, description)
+        put(ProductContract.ProductEntry.COLUMN_PRICE, price)
+        put(ProductContract.ProductEntry.COLUMN_OFFER, offer)
+    }
+    val selection = "${ProductContract.ProductEntry.COLUMN_BARCODE} = ?"
+    val selectionArgs = arrayOf(barcode)
+    db.update(ProductContract.ProductEntry.TABLE_NAME, values, selection, selectionArgs)
+}
+
+// Function to retrieve product from database using barcode
+private fun getProductFromDatabase(barcode: String): Product? {
+    val db = dbHelper.readableDatabase
+    val projection = arrayOf(
+        ProductContract.ProductEntry.COLUMN_BARCODE,
+        ProductContract.ProductEntry.COLUMN_NAME,
+        ProductContract.ProductEntry.COLUMN_DESCRIPTION,
+        ProductContract.ProductEntry.COLUMN_PRICE,
+        ProductContract.ProductEntry.COLUMN_OFFER
+    )
+    val selection = "${ProductContract.ProductEntry.COLUMN_BARCODE} = ?"
+    val selectionArgs = arrayOf(barcode)
+    val cursor = db.query(
+        ProductContract.ProductEntry.TABLE_NAME,
+        projection,
+        selection,
+        selectionArgs,
+        null,
+        null,
+        null
+    )
+    var product: Product? = null
+    with(cursor) {
+        if (moveToNext()) {
+            val name = getString(getColumnIndexOrThrow(ProductContract.ProductEntry.COLUMN_NAME))
+            val description = getString(getColumnIndexOrThrow(ProductContract.ProductEntry.COLUMN_DESCRIPTION))
+            val price = getDouble(getColumnIndexOrThrow(ProductContract.ProductEntry.COLUMN_PRICE))
+            val offer = getDouble(getColumnIndexOrThrow(ProductContract.ProductEntry.COLUMN_OFFER))
+            product = Product(barcode, name, description, price, offer)
+        }
+    }
+    cursor.close()
+    return product
+}
+fun addProductToDatabase(barcode: String, name: String, description: String, price: Double, offer: Double) {
+// Get the database instance
+    val db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "app_database").build()
+    // Add the product to the database
+    val product = Product(barcode, name, description, price, offer)
+    db.productDao().insertProduct(product)
+
+// Close the database
+    db.close()
+}
+}
